@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PDF Extractor</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+  </style>
+</head>
+<body>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="container">
+    <header>
+      <div class="badge">PDF Extractor</div>
+      <h1>Extrae texto<br/>de tus <span>PDFs</span></h1>
+      <p class="subtitle">// Sube un archivo y obtén el contenido al instante</p>
+    </header>
+
+    <!-- Upload Card -->
+    <div class="card" style="animation-delay:0.05s">
+      <div class="card-label">01 — Archivo PDF</div>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".pdf,application/pdf"/>
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+        </div>
+        <p class="drop-title">Arrastra tu PDF aquí</p>
+        <p class="drop-sub">o <span id="browseLink">selecciona un archivo</span> desde tu dispositivo</p>
+      </div>
+
+      <div class="file-preview" id="filePreview">
+        <div class="file-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 9.414V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div class="file-info">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-size" id="fileSize"></div>
+        </div>
+        <button class="file-remove" id="removeFile" title="Quitar archivo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mode Tabs + Options Card -->
+    <div class="card" style="animation-delay:0.1s">
+      <div class="card-label">02 — Modo de extracción</div>
+      <div class="tabs">
+        <button class="tab active" data-mode="full">Texto completo</button>
+        <button class="tab" data-mode="range">Rango de páginas</button>
+        <button class="tab" data-mode="metadata">Metadatos</button>
+      </div>
+
+      <div id="rangeOptions" class="hidden">
+        <div class="range-grid">
+          <div class="input-group">
+            <label for="startPage">Página inicio</label>
+            <input type="number" id="startPage" min="1" placeholder="1"/>
+          </div>
+          <div class="input-group">
+            <label for="endPage">Página final</label>
+            <input type="number" id="endPage" min="1" placeholder="5"/>
+          </div>
+        </div>
+        <p class="range-hint">Deja en blanco para extraer la primera página solamente.</p>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <button class="btn-submit" id="submitBtn" disabled>
+      <span class="btn-text">Extraer contenido</span>
+      <span class="spinner"></span>
+    </button>
+
+    <!-- Results -->
+    <div id="resultsSection" class="results-section hidden" style="margin-top:32px;">
+      <div class="card">
+        <div class="results-header">
+          <div class="results-title" id="resultsTitle">Resultado</div>
+          <button class="btn-copy" id="copyBtn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+            Copiar
+          </button>
+        </div>
+
+        <!-- Stats chips -->
+        <div class="stats-bar" id="statsBar"></div>
+
+        <!-- Text output -->
+        <div class="output-box hidden" id="outputText"></div>
+
+        <!-- Metadata grid -->
+        <div class="meta-grid hidden" id="outputMeta"></div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="errorSection" class="hidden" style="margin-top:24px;">
+      <div class="error-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p id="errorMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8080';
+    let selectedFile = null;
+    let currentMode = 'full';
+    let rawCopyText = '';
+
+    // Elements
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const filePreview = document.getElementById('filePreview');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFile = document.getElementById('removeFile');
+    const browseLink = document.getElementById('browseLink');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const errorSection = document.getElementById('errorSection');
+    const errorMsg = document.getElementById('errorMsg');
+    const copyBtn = document.getElementById('copyBtn');
+    const outputText = document.getElementById('outputText');
+    const outputMeta = document.getElementById('outputMeta');
+    const statsBar = document.getElementById('statsBar');
+    const resultsTitle = document.getElementById('resultsTitle');
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentMode = tab.dataset.mode;
+        const rangeOpts = document.getElementById('rangeOptions');
+        if (currentMode === 'range') rangeOpts.classList.remove('hidden');
+        else rangeOpts.classList.add('hidden');
+      });
+    });
+
+    // Drop zone events
+    browseLink.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('click', e => { if (e.target !== browseLink) fileInput.click(); });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragging'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragging'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragging');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'application/pdf') handleFile(file);
+      else showError('Solo se aceptan archivos PDF.');
+    });
+
+    function handleFile(file) {
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileSize.textContent = formatBytes(file.size);
+      filePreview.classList.add('visible');
+      dropzone.classList.add('has-file');
+      submitBtn.disabled = false;
+      clearResults();
+    }
+
+    removeFile.addEventListener('click', () => {
+      selectedFile = null;
+      fileInput.value = '';
+      filePreview.classList.remove('visible');
+      dropzone.classList.remove('has-file');
+      submitBtn.disabled = true;
+      clearResults();
+    });
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(2) + ' MB';
+    }
+
+    // Submit
+    submitBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      setLoading(true);
+      clearResults();
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      try {
+        let url, response;
+
+        if (currentMode === 'full') {
+          url = `${API_BASE}/upload`;
+          response = await fetch(url, { method: 'POST', body: formData });
+        } else if (currentMode === 'range') {
+          const start = document.getElementById('startPage').value || '1';
+          const end = document.getElementById('endPage').value || '1';
+          url = `${API_BASE}/upload-page-range?startPage=${start}&endPage=${end}`;
+          response = await fetch(url, { method: 'POST', body: formData });
+        } else if (currentMode === 'metadata') {
+          url = `${API_BASE}/metadata`;
+          response = await fetch(url, { method: 'POST', body: formData });
+        }
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          showError(data.error || 'Error desconocido del servidor.');
+          return;
+        }
+
+        renderResults(data);
+      } catch (err) {
+        showError('No se pudo conectar con el servidor. ¿Está corriendo en localhost:8080?');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function renderResults(data) {
+      resultsSection.classList.remove('hidden');
+      statsBar.innerHTML = '';
+      outputText.classList.add('hidden');
+      outputMeta.classList.add('hidden');
+
+      if (currentMode === 'metadata') {
+        const meta = data.metadata;
+        resultsTitle.textContent = 'Metadatos del PDF';
+
+        addStat('Páginas', meta.pages);
+        addStat('Creado', meta.creationDate);
+        addStat('Modificado', meta.modificationDate);
+
+        outputMeta.classList.remove('hidden');
+        outputMeta.innerHTML = '';
+        const fields = [
+          { key: 'Título', val: meta.title },
+          { key: 'Autor', val: meta.author },
+          { key: 'Asunto', val: meta.subject },
+          { key: 'Creador', val: meta.creator },
+          { key: 'Productor', val: meta.producer },
+          { key: 'Fecha creación', val: meta.creationDate },
+          { key: 'Fecha modificación', val: meta.modificationDate },
+          { key: 'Páginas totales', val: meta.pages },
+        ];
+        fields.forEach(f => {
+          const item = document.createElement('div');
+          item.className = 'meta-item';
+          item.innerHTML = `<div class="meta-key">${f.key}</div><div class="meta-val">${f.val || 'N/A'}</div>`;
+          outputMeta.appendChild(item);
+        });
+
+        rawCopyText = fields.map(f => `${f.key}: ${f.val || 'N/A'}`).join('\n');
+      } else {
+        const result = data.result;
+        const text = result.text || '';
+
+        const label = currentMode === 'range'
+          ? `Páginas ${result.startPage}–${result.endPage}`
+          : 'Texto extraído';
+        resultsTitle.textContent = label;
+
+        const charCount = text.length;
+        const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+        addStat('Caracteres', charCount.toLocaleString('es'));
+        addStat('Palabras', wordCount.toLocaleString('es'));
+        if (result.numpages) addStat('Páginas', result.numpages);
+        if (result.totalPages) addStat('Total páginas', result.totalPages);
+
+        outputText.classList.remove('hidden');
+        outputText.textContent = text || '(No se encontró texto en este PDF)';
+        rawCopyText = text;
+      }
+    }
+
+    function addStat(label, value) {
+      const chip = document.createElement('div');
+      chip.className = 'stat-chip';
+      chip.innerHTML = `<span>${label}</span><span>${value}</span>`;
+      statsBar.appendChild(chip);
+    }
+
+    // Copy
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(rawCopyText).then(() => {
+        copyBtn.classList.add('copied');
+        copyBtn.querySelector('svg').style.color = 'var(--success)';
+        const span = copyBtn.childNodes[1];
+        span.textContent = ' Copiado!';
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.querySelector('svg').style.color = '';
+          span.textContent = ' Copiar';
+        }, 2000);
+      });
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorSection.classList.remove('hidden');
+    }
+
+    function clearResults() {
+      resultsSection.classList.add('hidden');
+      errorSection.classList.add('hidden');
+      rawCopyText = '';
+    }
+
+    function setLoading(loading) {
+      submitBtn.classList.toggle('loading', loading);
+      submitBtn.disabled = loading;
+    }
+  </script>
+</body>
+</html>
