@@ -218,3 +218,6 @@ Si necesitas agregar otro origen, edita la configuración de CORS en `src/server
 - El endpoint `/upload-page-range` retorna el texto completo del PDF (el filtrado por página depende de la estructura interna del documento)
 
 ---
+
+Inspirado en https://www.freecodecamp.org/news/build-a-custom-pdf-text-extractor-with-nodejs-and-typescript/#heading-resources
+
