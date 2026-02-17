@@ -18,7 +18,7 @@ app.use(
 
 app.use(
   fileUpload({
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
     abortOnLimit: true,
   })
 );
